@@ -26,10 +26,10 @@ def carica_dati():
         data_s = res_s.json()
         standings = data_s['standings'][0]['table']
         
-        # Monitoraggio dinamico: prendiamo le ultime 8 squadre (posizioni 13-20)
+        # Monitoraggio dinamico: ultime 8 squadre (posizioni 13-20)
         ultime_8 = standings[12:20]
         
-        # Calcolo quota dinamica sulla 18esima (terzultima)
+        # Quota dinamica sulla 18esima
         terzultima = standings[17]
         giocate_t = max(1, terzultima['playedGames'])
         quota_f = max(34, min(int((terzultima['points'] / giocate_t) * 38) + 1, 40))
@@ -44,19 +44,20 @@ def carica_dati():
 # Caricamento dati
 ultime_8, giocata, calendario, soglia_salvezza, pos_classifica, live_matches = carica_dati()
 
-# --- 2. SCALA CROMATICA PERSONALIZZATA (13° -> 20°) ---
+# --- 2. SCALA CROMATICA AGGIORNATA (13° -> 20°) ---
+# Il primo colore (13°) è ora un Verde/Giallo Ocra molto più spento e opaco
 colori_scala = [
-    "#708238", # 13° - Verde Salvia (Spento, per il Torino/capolista del gruppo)
-    "#8DB600", # 14° - Verde Mela scuro
-    "#ADFF2F", # 15° - Giallo/Verde
-    "#FFD700", # 16° - Giallo
-    "#FFA500", # 17° - Giallo/Arancio
-    "#FF4500", # 18° - Rosso/Arancio (Terzultima)
-    "#D2042D", # 19° - Rosso
-    "#800020"  # 20° - Rosso Scuro (Ultima)
+    "#858B4C", # 13° - Verde Oliva spento (Misto Giallo, non brillante)
+    "#9CA64E", # 14° - Verde Muschio chiaro
+    "#BDB76B", # 15° - Kaki scuro (Transizione verso il giallo)
+    "#E6C35C", # 16° - Ocra/Giallo opaco
+    "#D98E32", # 17° - Arancio terra
+    "#C44E31", # 18° - Rosso Mattone (Zona rischio)
+    "#A62C2B", # 19° - Rosso scuro opaco
+    "#5C1A1B"  # 20° - Granata profondo / Nero-Rosso
 ]
 
-# --- 3. NOTIFICHE LIVE (TOAST) ---
+# --- 3. NOTIFICHE LIVE ---
 if live_matches:
     for m in live_matches:
         st.toast(f"⚽ {m['homeTeam']['shortName']} {m['score']['fullTime']['home']} - {m['score']['fullTime']['away']} {m['awayTeam']['shortName']}", icon="📢")
@@ -73,23 +74,21 @@ if ultime_8:
         pos = team['position']
         p_mancanti = max(0, soglia_salvezza - punti)
         
-        # Algoritmo Percentuale Gerarchica (Bonus posizione per evitare duplicati)
+        # Algoritmo Percentuale Gerarchica
         base_perc = (punti / soglia_salvezza) * 100
-        bonus_pos = (20 - pos) # La 13° ha +7%, la 20° ha +0%
+        bonus_pos = (20 - pos)
         perc_salv = min(int(base_perc + bonus_pos), 99)
         
-        # Colore di sfondo
         bg_color = colori_scala[idx]
-        # Controllo retrocessione matematica
         if (38 - giocata) * 3 < p_mancanti:
             bg_color, perc_salv = "#000000", 0
 
-        # Rendering Box Squadra (Ottimizzato per Smartphone)
+        # Rendering Box
         st.markdown(f"""
             <div style="background-color: {bg_color}; padding: 8px 15px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; color: white; margin-top: 10px;">
                 <div style="display: flex; flex-direction: column;">
-                    <span style="font-size: 0.6em; font-weight: bold; opacity: 0.8;">{pos}° POSTO</span>
-                    <span style="font-weight: bold; font-size: 1.1em; letter-spacing: -0.5px;">{nome_display}</span>
+                    <span style="font-size: 0.61em; font-weight: bold; opacity: 0.85;">{pos}° POSTO</span>
+                    <span style="font-weight: bold; font-size: 1.15em; letter-spacing: -0.5px;">{nome_display}</span>
                 </div>
                 <div style="text-align: right;">
                     <span style="font-size: 2.2em; font-weight: 900; line-height: 1;">{punti}</span>
@@ -112,26 +111,21 @@ if ultime_8:
             </div>
         """, unsafe_allow_html=True)
 
-        # --- DETTAGLI SOTTO-VOCE (PIANO E CALENDARIO) ---
         with st.expander(f"📊 PIANO SALVEZZA E CALENDARIO {nome_display}"):
             tab_p, tab_c = st.tabs(["🎯 Piano Salvezza", "📅 Calendario"])
-            
             with tab_p:
                 partite_sq = [m for m in calendario if nome_full in m['homeTeam']['name'] or nome_full in m['awayTeam']['name']]
                 acc_p = 0
                 target_p = soglia_salvezza - punti
-                
                 for m in partite_sq:
                     h, a = m['homeTeam']['name'], m['awayTeam']['name']
                     is_h = nome_full in h
                     avv = a if is_h else h
                     p_avv = pos_classifica.get(avv, 10)
-                    
                     if acc_p >= target_p: res, icon, bg = "SALVEZZA RAGGIUNTA", "🥳", "#1a1c23"
                     elif p_avv <= 6: res, icon, bg = "SCONFITTA PREVISTA", "💀", "#212529"
                     elif p_avv >= 14 or is_h: res, icon, bg = "VITTORIA OBBLIGATORIA", "🔥", "#212529"; acc_p += 3
                     else: res, icon, bg = "PAREGGIO UTILE", "🤝", "#212529"; acc_p += 1
-                    
                     st.markdown(f"""
                         <div style="background-color: {bg}; padding: 8px; border-radius: 5px; color: white; margin-bottom: 5px; border: 1px solid #444; display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 1.2em;">{icon}</span>
@@ -141,18 +135,11 @@ if ultime_8:
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
-
             with tab_c:
                 for m in [m for m in calendario if nome_full in m['homeTeam']['name'] or nome_full in m['awayTeam']['name']]:
                     dt = datetime.strptime(m['utcDate'], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=1)
-                    st.markdown(f"""
-                        <div style="padding: 5px; border-bottom: 1px solid #eee; font-size: 0.85em;">
-                            <b>{dt.strftime('%d/%m - %H:%M')}</b>: {m['homeTeam']['shortName']} vs {m['awayTeam']['shortName']}
-                        </div>
-                    """, unsafe_allow_html=True)
-
-else:
-    st.error("Dati non disponibili. Controlla l'API Key.")
+                    st.markdown(f"<div style='padding: 5px; border-bottom: 1px solid #eee; font-size: 0.85em;'><b>{dt.strftime('%d/%m - %H:%M')}</b>: {m['homeTeam']['shortName']} vs {m['awayTeam']['shortName']}</div>", unsafe_allow_html=True)
 
 st.sidebar.button("🔄 AGGIORNA LIVE")
 
+  
