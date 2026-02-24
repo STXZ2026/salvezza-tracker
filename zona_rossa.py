@@ -5,11 +5,11 @@ import requests
 from datetime import datetime, timedelta
 try:
     from streamlit_autorefresh import st_autorefresh
-except ImportErrors:
+except ImportError:
     st_autorefresh = None
 
 # --- 1. CONFIGURAZIONE ---
-API_KEY = "c8cac2cec6e64345868d516c077c1685" 
+API_KEY = "8cac2cec6e64345868d516c077c1685" 
 ID_SERIE_A = "SA"
 
 st.set_page_config(page_title="Survival Tracker Pro", layout="wide")
@@ -53,17 +53,17 @@ def carica_dati():
 # Caricamento dati
 ultime_8, giocata, calendario, soglia_salvezza, pos_classifica, live_matches = carica_dati()
 
-# --- 2. SCALA CROMATICA RICALIBRATA (DECISA E BRILLANTE) ---
-# Colori più saturi per distinguersi bene senza essere fosforescenti
+# --- 2. SCALA CROMATICA DECISA (13° -> 20°) ---
+# Invertita: Verde (13°) -> Rosso/Nero (20°)
 colori_scala = [
-    "#2E7D32", # 13° - Verde Bosco deciso
+    "#2E7D32", # 13° - Verde Bosco
     "#689F38", # 14° - Verde Erba
-    "#AFB42B", # 15° - Giallo Limone carico
+    "#AFB42B", # 15° - Giallo Limone
     "#FBC02D", # 16° - Giallo Sole
     "#FFA000", # 17° - Arancio Ambra
-    "#F57C00", # 18° - Arancio Acceso (Zona Rischio)
+    "#F57C00", # 18° - Arancio Acceso
     "#D32F2F", # 19° - Rosso Fuoco
-    "#C62828"  # 20° - Rosso Sangue (Ultima)
+    "#3E0000"  # 20° - Rosso Scuro/Nero (Hellas Verona/Ultima)
 ]
 
 # --- 3. NOTIFICHE LIVE ---
@@ -74,17 +74,19 @@ if live_matches:
 
 # --- 4. INTERFACCIA PRINCIPALE ---
 st.title("🏆 RANKING SALVEZZA LIVE")
-st.markdown(f"**Target Salvezza: {soglia_salvezza}pt** | Ultimo aggiornamento: {datetime.now().strftime('%H:%M:%S')}")
+st.markdown(f"**Target Salvezza: {soglia_salvezza}pt** | Aggiornato: {datetime.now().strftime('%H:%M:%S')}")
+
+
 
 if ultime_8:
     for idx, team in enumerate(ultime_8):
         nome_full = team['team']['name']
-        nome_display = nome_full.replace("FC", "").replace("CFC", "").replace("US", "").strip().upper()
+        nome_display = nome_full.replace("FC", "").replace("CFC", "").replace("US", "").replace("Hellas", "").strip().upper()
         punti = team['points']
         pos = team['position']
         p_mancanti = max(0, soglia_salvezza - punti)
         
-        # Algoritmo Percentuale Gerarchica
+        # Algoritmo Percentuale Gerarchica con bonus posizione
         base_perc = (punti / soglia_salvezza) * 100
         bonus_pos = (20 - pos)
         perc_salv = min(int(base_perc + bonus_pos), 99)
@@ -93,7 +95,7 @@ if ultime_8:
         if (38 - giocata) * 3 < p_mancanti:
             bg_color, perc_salv = "#000000", 0
 
-        # Rendering Box Squadra
+        # Rendering Box Squadra (Ottimizzato iPhone)
         st.markdown(f"""
             <div style="background-color: {bg_color}; padding: 8px 15px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; color: white; margin-top: 10px;">
                 <div style="display: flex; flex-direction: column;">
@@ -141,4 +143,6 @@ if ultime_8:
                     dt = datetime.strptime(m['utcDate'], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=1)
                     st.markdown(f"<div style='font-size:0.85em; border-bottom:1px solid #eee; padding:3px;'><b>{dt.strftime('%d/%m')}</b>: {m['homeTeam']['shortName']} vs {m['awayTeam']['shortName']}</div>", unsafe_allow_html=True)
 
-st.sidebar.button("🔄 AGGIORNA ORA")
+st.sidebar.button("🔄 AGGIORNA LIVE")
+
+      
