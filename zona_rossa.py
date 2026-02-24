@@ -3,6 +3,9 @@
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
+# Importante: per l'auto-refresh serve questa piccola estensione
+# Se non l'hai, Streamlit ti chiederà di aggiungerla o puoi ignorarla e premere F5
+from streamlit_autorefresh import st_autorefresh
 
 # --- 1. CONFIGURAZIONE ---
 API_KEY = "c8cac2cec6e64345868d516c077c1685" 
@@ -10,16 +13,19 @@ ID_SERIE_A = "SA"
 
 st.set_page_config(page_title="Survival Tracker Pro", layout="wide")
 
+# AGGIORNAMENTO AUTOMATICO OGNI 60 SECONDI
+# Questo "timer" farà ricaricare l'app da sola senza che tu faccia nulla
+st_autorefresh(interval=60 * 1000, key="datarefresh")
+
 def carica_dati():
     headers = {'X-Auth-Token': API_KEY}
+    # Endpoint per classifica LIVE e match in corso
     url_s = f"https://api.football-data.org/v4/competitions/{ID_SERIE_A}/standings"
-    url_m = f"https://api.football-data.org/v4/competitions/{ID_SERIE_A}/matches?status=SCHEDULED"
-    url_live = f"https://api.football-data.org/v4/competitions/{ID_SERIE_A}/matches"
+    url_m = f"https://api.football-data.org/v4/competitions/{ID_SERIE_A}/matches"
     
     try:
         res_s = requests.get(url_s, headers=headers, timeout=5)
         res_m = requests.get(url_m, headers=headers, timeout=5)
-        res_l = requests.get(url_live, headers=headers, timeout=5)
         
         if res_s.status_code != 200: return None, 0, [], 38, {}, []
         
@@ -35,36 +41,32 @@ def carica_dati():
         quota_f = max(34, min(int((terzultima['points'] / giocate_t) * 38) + 1, 40))
         
         posizioni = {item['team']['name']: item['position'] for item in standings}
-        match_live = [m for m in res_l.json().get('matches', []) if m['status'] == 'IN_PLAY']
         
-        return ultime_8, standings[0]['playedGames'], res_m.json().get('matches', []), quota_f, posizioni, match_live
+        # Filtriamo i match: quelli in corso per le notifiche e quelli futuri per il calendario
+        tutti_match = res_m.json().get('matches', [])
+        match_live = [m for m in tutti_match if m['status'] in ['IN_PLAY', 'PAUSED']]
+        match_futuri = [m for m in tutti_match if m['status'] == 'TIMED']
+        
+        return ultime_8, standings[0]['playedGames'], match_futuri, quota_f, posizioni, match_live
     except:
         return None, 0, [], 38, {}, []
 
 # Caricamento dati
 ultime_8, giocata, calendario, soglia_salvezza, pos_classifica, live_matches = carica_dati()
 
-# --- 2. SCALA CROMATICA AGGIORNATA (13° -> 20°) ---
-# Il primo colore (13°) è ora un Verde/Giallo Ocra molto più spento e opaco
-colori_scala = [
-    "#858B4C", # 13° - Verde Oliva spento (Misto Giallo, non brillante)
-    "#9CA64E", # 14° - Verde Muschio chiaro
-    "#BDB76B", # 15° - Kaki scuro (Transizione verso il giallo)
-    "#E6C35C", # 16° - Ocra/Giallo opaco
-    "#D98E32", # 17° - Arancio terra
-    "#C44E31", # 18° - Rosso Mattone (Zona rischio)
-    "#A62C2B", # 19° - Rosso scuro opaco
-    "#5C1A1B"  # 20° - Granata profondo / Nero-Rosso
-]
+# --- 2. SCALA CROMATICA RICALIBRATA ---
+colori_scala = ["#556B2F", "#8B8B00", "#BDB76B", "#DAA520", "#B8860B", "#A0522D", "#8B0000", "#4A0404"]
 
-# --- 3. NOTIFICHE LIVE ---
+# --- 3. NOTIFICHE LIVE (MESSAGGI VOLANTI) ---
+# Se ci sono partite in corso, l'app mostra un avviso in alto
 if live_matches:
     for m in live_matches:
-        st.toast(f"⚽ {m['homeTeam']['shortName']} {m['score']['fullTime']['home']} - {m['score']['fullTime']['away']} {m['awayTeam']['shortName']}", icon="📢")
+        fase = "LIVE" if m['status'] == 'IN_PLAY' else "INTERVALLO"
+        st.toast(f"⚽ {fase}: {m['homeTeam']['shortName']} {m['score']['fullTime']['home']} - {m['score']['fullTime']['away']} {m['awayTeam']['shortName']}", icon="📢")
 
 # --- 4. INTERFACCIA PRINCIPALE ---
 st.title("🏆 RANKING SALVEZZA LIVE")
-st.markdown(f"**Target Salvezza: {soglia_salvezza}pt** | Proiezione Giornata {giocata}")
+st.markdown(f"**Target Salvezza: {soglia_salvezza}pt** | Ultimo aggiornamento: {datetime.now().strftime('%H:%M:%S')}")
 
 if ultime_8:
     for idx, team in enumerate(ultime_8):
@@ -74,7 +76,7 @@ if ultime_8:
         pos = team['position']
         p_mancanti = max(0, soglia_salvezza - punti)
         
-        # Algoritmo Percentuale Gerarchica
+        # Calcolo Percentuale con bonus posizione
         base_perc = (punti / soglia_salvezza) * 100
         bonus_pos = (20 - pos)
         perc_salv = min(int(base_perc + bonus_pos), 99)
@@ -83,7 +85,7 @@ if ultime_8:
         if (38 - giocata) * 3 < p_mancanti:
             bg_color, perc_salv = "#000000", 0
 
-        # Rendering Box
+        # Rendering Box Squadra
         st.markdown(f"""
             <div style="background-color: {bg_color}; padding: 8px 15px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; color: white; margin-top: 10px;">
                 <div style="display: flex; flex-direction: column;">
@@ -111,12 +113,11 @@ if ultime_8:
             </div>
         """, unsafe_allow_html=True)
 
-        with st.expander(f"📊 PIANO SALVEZZA E CALENDARIO {nome_display}"):
-            tab_p, tab_c = st.tabs(["🎯 Piano Salvezza", "📅 Calendario"])
+        with st.expander(f"📊 ANALISI E CALENDARIO"):
+            tab_p, tab_c = st.tabs(["🎯 Piano Salvezza", "📅 Date"])
             with tab_p:
                 partite_sq = [m for m in calendario if nome_full in m['homeTeam']['name'] or nome_full in m['awayTeam']['name']]
-                acc_p = 0
-                target_p = soglia_salvezza - punti
+                acc_p, target_p = 0, soglia_salvezza - punti
                 for m in partite_sq:
                     h, a = m['homeTeam']['name'], m['awayTeam']['name']
                     is_h = nome_full in h
@@ -126,20 +127,11 @@ if ultime_8:
                     elif p_avv <= 6: res, icon, bg = "SCONFITTA PREVISTA", "💀", "#212529"
                     elif p_avv >= 14 or is_h: res, icon, bg = "VITTORIA OBBLIGATORIA", "🔥", "#212529"; acc_p += 3
                     else: res, icon, bg = "PAREGGIO UTILE", "🤝", "#212529"; acc_p += 1
-                    st.markdown(f"""
-                        <div style="background-color: {bg}; padding: 8px; border-radius: 5px; color: white; margin-bottom: 5px; border: 1px solid #444; display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 1.2em;">{icon}</span>
-                            <div style="display: flex; flex-direction: column;">
-                                <b style="font-size: 0.75em;">{res}</b>
-                                <span style="font-size: 0.85em;">vs {avv}</span>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div style='background-color:{bg}; padding:8px; border-radius:5px; color:white; margin-bottom:5px; font-size:0.8em;'>{icon} <b>{res}</b> vs {avv}</div>", unsafe_allow_html=True)
             with tab_c:
-                for m in [m for m in calendario if nome_full in m['homeTeam']['name'] or nome_full in m['awayTeam']['name']]:
+                for m in [m for m in calendario if nome_full in m['homeTeam']['name'] or nome_full in m['awayTeam']['name']][:5]:
                     dt = datetime.strptime(m['utcDate'], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=1)
-                    st.markdown(f"<div style='padding: 5px; border-bottom: 1px solid #eee; font-size: 0.85em;'><b>{dt.strftime('%d/%m - %H:%M')}</b>: {m['homeTeam']['shortName']} vs {m['awayTeam']['shortName']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size:0.85em; border-bottom:1px solid #eee; padding:3px;'><b>{dt.strftime('%d/%m')}</b>: {m['homeTeam']['shortName']} vs {m['awayTeam']['shortName']}</div>", unsafe_allow_html=True)
 
-st.sidebar.button("🔄 AGGIORNA LIVE")
-
-  
+# Nota: Il pulsante manuale in sidebar lo lasciamo come "emergenza"
+st.sidebar.button("🔄 AGGIORNA ORA")
