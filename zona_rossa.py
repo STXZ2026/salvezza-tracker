@@ -24,14 +24,12 @@ if st_autorefresh:
 def pulisci_nome(nome):
     # Rimuove anni (es. 1909)
     nome = re.sub(r'\d+', '', nome)
-    # Lista sigle da eliminare
-    sigle = ["FC", "CFC", "US", "ACF", "AC", "SC", "AS", "SS", "BC", "Hellas", "H."]
+    # Lista sigle da eliminare in modo aggressivo
+    sigle = ["FC", "CFC", "US", "ACF", "AC", "SC", "AS", "SS", "BC", "HELLAS", "H.", "BP", "1909"]
     for s in sigle:
-        # Rimuove la sigla solo se è una parola intera (non dentro altre parole)
         nome = re.sub(r'\b' + s + r'\b', '', nome, flags=re.IGNORECASE)
-    # Rimuove lettere singole rimaste isolate (come la 'C' di Genoa o Verona)
+    # Rimuove lettere singole rimaste isolate (come la 'C')
     nome = re.sub(r'\b[a-zA-Z]\b', '', nome)
-    # Pulizia spazi e tutto in maiuscolo
     return nome.strip().upper()
 
 def carica_dati():
@@ -64,16 +62,16 @@ def carica_dati():
 
 ultime_8, giocata, calendario, soglia_salvezza, pos_classifica, live_matches = carica_dati()
 
-# --- 2. SCALA CROMATICA DECISA ---
+# --- 2. SCALA CROMATICA RICALIBRATA (Dalla 13° alla 20°) ---
 colori_scala = [
     "#2E7D32", # 13° - Verde Bosco
     "#689F38", # 14° - Verde Erba
     "#AFB42B", # 15° - Giallo Limone
     "#FBC02D", # 16° - Giallo Sole
-    "#FFA000", # 17° - Arancio Ambra
-    "#F57C00", # 18° - Arancio Acceso
-    "#D32F2F", # 19° - Rosso Fuoco
-    "#8B0000"  # 20° - Rosso Sangue Scuro
+    "#FF8F00", # 17° - Arancio Carico
+    "#D84315", # 18° - Arancio Bruciato/Ruggine (Inizio zona retrocessione)
+    "#B71C1C", # 19° - Rosso Scuro Intenso
+    "#4A0404"  # 20° - Granata Profondo (Quasi nero)
 ]
 
 # --- 3. NOTIFICHE LIVE ---
