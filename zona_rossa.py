@@ -2,6 +2,7 @@
 
 import streamlit as st
 import requests
+import re
 from datetime import datetime, timedelta
 
 # Gestione errore libreria autorefresh
@@ -20,6 +21,19 @@ st.set_page_config(page_title="Survival Tracker Pro", layout="wide")
 if st_autorefresh:
     st_autorefresh(interval=60 * 1000, key="datarefresh")
 
+def pulisci_nome(nome):
+    # Rimuove anni (es. 1909)
+    nome = re.sub(r'\d+', '', nome)
+    # Lista sigle da eliminare
+    sigle = ["FC", "CFC", "US", "ACF", "AC", "SC", "AS", "SS", "BC", "Hellas", "H."]
+    for s in sigle:
+        # Rimuove la sigla solo se è una parola intera (non dentro altre parole)
+        nome = re.sub(r'\b' + s + r'\b', '', nome, flags=re.IGNORECASE)
+    # Rimuove lettere singole rimaste isolate (come la 'C' di Genoa o Verona)
+    nome = re.sub(r'\b[a-zA-Z]\b', '', nome)
+    # Pulizia spazi e tutto in maiuscolo
+    return nome.strip().upper()
+
 def carica_dati():
     headers = {'X-Auth-Token': API_KEY}
     url_s = f"https://api.football-data.org/v4/competitions/{ID_SERIE_A}/standings"
@@ -33,11 +47,8 @@ def carica_dati():
         
         data_s = res_s.json()
         standings = data_s['standings'][0]['table']
-        
-        # Ultime 8 squadre (posizioni 13-20)
         ultime_8 = standings[12:20]
         
-        # Quota dinamica sulla 18esima
         terzultima = standings[17]
         giocate_t = max(1, terzultima['playedGames'])
         quota_f = max(34, min(int((terzultima['points'] / giocate_t) * 38) + 1, 40))
@@ -48,14 +59,12 @@ def carica_dati():
         match_futuri = [m for m in tutti_match if m['status'] == 'TIMED']
         
         return ultime_8, standings[0]['playedGames'], match_futuri, quota_f, posizioni, match_live
-    except Exception as e:
+    except:
         return None, 0, [], 38, {}, []
 
-# Caricamento
 ultime_8, giocata, calendario, soglia_salvezza, pos_classifica, live_matches = carica_dati()
 
-# --- 2. SCALA CROMATICA DECISA (13° -> 20°) ---
-# Il colore del Verona (20°) ora è un bordeaux molto carico, meno nero del precedente.
+# --- 2. SCALA CROMATICA DECISA ---
 colori_scala = [
     "#2E7D32", # 13° - Verde Bosco
     "#689F38", # 14° - Verde Erba
@@ -63,8 +72,8 @@ colori_scala = [
     "#FBC02D", # 16° - Giallo Sole
     "#FFA000", # 17° - Arancio Ambra
     "#F57C00", # 18° - Arancio Acceso
-    "#D32F2F", # 19° - Rosso Fuoco (Pisa)
-    "#8B0000"  # 20° - Rosso Sangue Scuro (Verona)
+    "#D32F2F", # 19° - Rosso Fuoco
+    "#8B0000"  # 20° - Rosso Sangue Scuro
 ]
 
 # --- 3. NOTIFICHE LIVE ---
@@ -74,20 +83,17 @@ if live_matches:
 
 # --- 4. INTERFACCIA ---
 st.title("🏆 RANKING SALVEZZA LIVE")
-st.markdown(f"**Target Salvezza: {soglia_salvezza}pt** | Aggiornato: {datetime.now().strftime('%H:%M:%S')}")
+st.markdown(f"**Target Salvezza: {soglia_salvezza}pt** | {datetime.now().strftime('%H:%M:%S')}")
 
 if ultime_8:
     for idx, team in enumerate(ultime_8):
         nome_full = team['team']['name']
-        
-        # PULIZIA NOMI (Solo il nome principale)
-        nome_clean = nome_full.replace("FC", "").replace("CFC", "").replace("US", "").replace("ACF", "").replace("Hellas", "").replace("AC", "").replace("SC", "").strip().upper()
+        nome_clean = pulisci_nome(nome_full)
         
         punti = team['points']
         pos = team['position']
         p_mancanti = max(0, soglia_salvezza - punti)
         
-        # Percentuale con bonus posizione
         base_perc = (punti / soglia_salvezza) * 100
         bonus_pos = (20 - pos)
         perc_salv = min(int(base_perc + bonus_pos), 99)
@@ -95,12 +101,11 @@ if ultime_8:
         bg_color = colori_scala[idx]
         if (38 - giocata) * 3 < p_mancanti: bg_color, perc_salv = "#000000", 0
 
-        # Rendering Box
         st.markdown(f"""
             <div style="background-color: {bg_color}; padding: 8px 15px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; color: white; margin-top: 10px;">
                 <div style="display: flex; flex-direction: column;">
                     <span style="font-size: 0.6em; font-weight: bold; opacity: 0.85;">{pos}° POSTO</span>
-                    <span style="font-weight: bold; font-size: 1.2em; letter-spacing: -0.5px;">{nome_clean}</span>
+                    <span style="font-weight: bold; font-size: 1.3em; letter-spacing: -0.5px;">{nome_clean}</span>
                 </div>
                 <div style="text-align: right;">
                     <span style="font-size: 2.2em; font-weight: 900; line-height: 1;">{punti}</span>
@@ -143,6 +148,6 @@ if ultime_8:
                     dt = datetime.strptime(m['utcDate'], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=1)
                     st.markdown(f"<div style='font-size:0.85em; border-bottom:1px solid #eee; padding:3px;'><b>{dt.strftime('%d/%m')}</b>: {m['homeTeam']['shortName']} vs {m['awayTeam']['shortName']}</div>", unsafe_allow_html=True)
 else:
-    st.info("Caricamento dati in corso... Verifica la connessione o l'API Key.")
+    st.info("In attesa dei dati...")
 
 st.sidebar.button("🔄 AGGIORNA ORA")
