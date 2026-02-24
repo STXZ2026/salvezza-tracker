@@ -1,11 +1,12 @@
-# --- c8cac2cec6e64345868d516c077c1685
+# --- CHIAVE DA COPIARE c8cac2cec6e64345868d516c077c1685
 
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
-# Importante: per l'auto-refresh serve questa piccola estensione
-# Se non l'hai, Streamlit ti chiederà di aggiungerla o puoi ignorarla e premere F5
-from streamlit_autorefresh import st_autorefresh
+try:
+    from streamlit_autorefresh import st_autorefresh
+except ImportErrors:
+    st_autorefresh = None
 
 # --- 1. CONFIGURAZIONE ---
 API_KEY = "c8cac2cec6e64345868d516c077c1685" 
@@ -14,12 +15,11 @@ ID_SERIE_A = "SA"
 st.set_page_config(page_title="Survival Tracker Pro", layout="wide")
 
 # AGGIORNAMENTO AUTOMATICO OGNI 60 SECONDI
-# Questo "timer" farà ricaricare l'app da sola senza che tu faccia nulla
-st_autorefresh(interval=60 * 1000, key="datarefresh")
+if st_autorefresh:
+    st_autorefresh(interval=60 * 1000, key="datarefresh")
 
 def carica_dati():
     headers = {'X-Auth-Token': API_KEY}
-    # Endpoint per classifica LIVE e match in corso
     url_s = f"https://api.football-data.org/v4/competitions/{ID_SERIE_A}/standings"
     url_m = f"https://api.football-data.org/v4/competitions/{ID_SERIE_A}/matches"
     
@@ -42,7 +42,6 @@ def carica_dati():
         
         posizioni = {item['team']['name']: item['position'] for item in standings}
         
-        # Filtriamo i match: quelli in corso per le notifiche e quelli futuri per il calendario
         tutti_match = res_m.json().get('matches', [])
         match_live = [m for m in tutti_match if m['status'] in ['IN_PLAY', 'PAUSED']]
         match_futuri = [m for m in tutti_match if m['status'] == 'TIMED']
@@ -54,11 +53,20 @@ def carica_dati():
 # Caricamento dati
 ultime_8, giocata, calendario, soglia_salvezza, pos_classifica, live_matches = carica_dati()
 
-# --- 2. SCALA CROMATICA RICALIBRATA ---
-colori_scala = ["#556B2F", "#8B8B00", "#BDB76B", "#DAA520", "#B8860B", "#A0522D", "#8B0000", "#4A0404"]
+# --- 2. SCALA CROMATICA RICALIBRATA (DECISA E BRILLANTE) ---
+# Colori più saturi per distinguersi bene senza essere fosforescenti
+colori_scala = [
+    "#2E7D32", # 13° - Verde Bosco deciso
+    "#689F38", # 14° - Verde Erba
+    "#AFB42B", # 15° - Giallo Limone carico
+    "#FBC02D", # 16° - Giallo Sole
+    "#FFA000", # 17° - Arancio Ambra
+    "#F57C00", # 18° - Arancio Acceso (Zona Rischio)
+    "#D32F2F", # 19° - Rosso Fuoco
+    "#C62828"  # 20° - Rosso Sangue (Ultima)
+]
 
-# --- 3. NOTIFICHE LIVE (MESSAGGI VOLANTI) ---
-# Se ci sono partite in corso, l'app mostra un avviso in alto
+# --- 3. NOTIFICHE LIVE ---
 if live_matches:
     for m in live_matches:
         fase = "LIVE" if m['status'] == 'IN_PLAY' else "INTERVALLO"
@@ -76,7 +84,7 @@ if ultime_8:
         pos = team['position']
         p_mancanti = max(0, soglia_salvezza - punti)
         
-        # Calcolo Percentuale con bonus posizione
+        # Algoritmo Percentuale Gerarchica
         base_perc = (punti / soglia_salvezza) * 100
         bonus_pos = (20 - pos)
         perc_salv = min(int(base_perc + bonus_pos), 99)
@@ -133,5 +141,4 @@ if ultime_8:
                     dt = datetime.strptime(m['utcDate'], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=1)
                     st.markdown(f"<div style='font-size:0.85em; border-bottom:1px solid #eee; padding:3px;'><b>{dt.strftime('%d/%m')}</b>: {m['homeTeam']['shortName']} vs {m['awayTeam']['shortName']}</div>", unsafe_allow_html=True)
 
-# Nota: Il pulsante manuale in sidebar lo lasciamo come "emergenza"
 st.sidebar.button("🔄 AGGIORNA ORA")
