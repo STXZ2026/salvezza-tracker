@@ -9,7 +9,7 @@ except ImportError:
     st_autorefresh = None
 
 # --- 1. CONFIGURAZIONE ---
-API_KEY = "8cac2cec6e64345868d516c077c1685" 
+API_KEY = "c8cac2cec6e64345868d516c077c1685" 
 ID_SERIE_A = "SA"
 
 st.set_page_config(page_title="Survival Tracker Pro", layout="wide")
